@@ -1,0 +1,189 @@
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+
+def import_data(data_path='data'):
+    # Definir la ruta del directorio y listar los archivos
+    data_path = 'data'
+    files = os.listdir(data_path)
+
+    # Lista para guardar los DataFrames
+    dfs = []
+
+    # Crear figura para los plots
+    plt.figure(figsize=(12, 6))
+
+    # Leer y plotear cada archivo
+    for file in files:
+        if file.startswith('data') and file.endswith('.csv'):
+            file_path = os.path.join(data_path, file)
+            df = pd.read_csv(file_path)
+
+            # Guardar el DataFrame en la lista
+            dfs.append(df)
+
+    # Concatenar todos los DataFrames
+    df_total = pd.concat(dfs, ignore_index=True)
+
+    df_total['FECHA'] = pd.to_datetime(df_total['FECHA'])
+
+    return df_total
+
+
+def missing_data_interpolation(df_total, n):
+    # Filtrar y ordenar
+    df_cajero_n = df_total[df_total['NRO_CAJERO'] == n].sort_values('FECHA')
+    rango_fechas = pd.date_range(start=df_cajero_n['FECHA'].min(), end=df_cajero_n['FECHA'].max(), freq='D')
+    df_completo = pd.DataFrame({'FECHA': rango_fechas})
+
+    # Merge para tener NaNs en días faltantes
+    df_merge = df_completo.merge(df_cajero_n[['FECHA', 'DISPENSADO', 'REMANENTE']], on='FECHA', how='left')
+
+    # Inicializar columnas interpoladas
+    df_merge['REMANENTE_interp'] = df_merge['REMANENTE']
+    df_merge['DISPENSADO_interp'] = df_merge['DISPENSADO']
+
+    # Índices de días con datos
+    idx_known = df_merge[df_merge['REMANENTE'].notna()].index
+
+    # Recorrer pares de días conocidos consecutivos
+    for i in range(len(idx_known) - 1):
+        idx_start = idx_known[i]
+        idx_end = idx_known[i+1]
+        
+        rem_start = df_merge.at[idx_start, 'REMANENTE']
+        rem_end = df_merge.at[idx_end, 'REMANENTE']
+        
+        # Días faltantes entre idx_start y idx_end
+        gap_idx = list(range(idx_start + 1, idx_end))
+
+        if not gap_idx:
+            continue  # nada que interpolar
+        
+        if rem_end < rem_start:
+            df_merge.loc[gap_idx, 'REMANENTE_interp'] = df_merge['REMANENTE_interp'].interpolate(method='linear').loc[gap_idx]
+            
+            for j in gap_idx:
+                rem_anterior = df_merge.loc[j - 1, 'REMANENTE_interp']
+                rem_actual = df_merge.loc[j, 'REMANENTE_interp']
+                df_merge.loc[j, 'DISPENSADO_interp'] = rem_anterior - rem_actual
+        else:
+            # Caso especial: no interpolar, repetir valor anterior y poner DISPENSADO=0
+            df_merge.loc[gap_idx, 'REMANENTE_interp'] = rem_start
+            df_merge.loc[gap_idx, 'DISPENSADO_interp'] = 0
+
+    # Asegurar que el primer DISPENSADO no sea NaN
+    df_merge['DISPENSADO_interp'] = df_merge['DISPENSADO_interp'].fillna(0)
+
+    # Resultado final
+    df_resultado = df_merge[['FECHA', 'DISPENSADO_interp', 'REMANENTE_interp']].rename(
+        columns={'DISPENSADO_interp': 'DISPENSADO', 'REMANENTE_interp': 'REMANENTE'}
+    )
+    df_resultado['NRO_CAJERO'] = n
+
+    return df_resultado
+
+
+def week_one_hot_encoding(df_resultado):
+    dia_de_la_semana = df_resultado['FECHA'].dt.day_name()
+
+    # Realizar el one-hot encoding
+    dias_one_hot = pd.get_dummies(dia_de_la_semana, prefix='DIA')
+
+    dias_one_hot = dias_one_hot.astype(int)
+
+    # Concatenar las columnas de one-hot encoding al DataFrame original
+    df_resultado = pd.concat([df_resultado, dias_one_hot], axis=1)
+
+    return df_resultado
+
+
+def split_date(df_resultado):
+    df_resultado['AÑO'] = df_resultado['FECHA'].dt.year
+    df_resultado['MES'] = df_resultado['FECHA'].dt.month
+    df_resultado['DIA'] = df_resultado['FECHA'].dt.day
+
+    return df_resultado
+
+
+def add_inflation(df_resultado, inflacion_path='data/inflation.csv'):
+    # Leer el archivo de inflación
+    df_inflacion = pd.read_csv(inflacion_path)
+
+    # Crear un diccionario para acceder rápidamente a la inflación por año y mes
+    inflacion_dict = {(row['año'], row['mes']): row['inflacion'] for _, row in df_inflacion.iterrows()}
+
+    # Función para obtener la inflación del mes anterior
+    def obtener_inflacion_anterior(fecha):
+        año = fecha.year
+        mes = fecha.month
+        
+        if mes == 1:  # Si es enero, tomar diciembre del año anterior
+            mes_anterior = 12
+            año_anterior = año - 1
+        else:  # Para otros meses, tomar el mes anterior del mismo año
+            mes_anterior = mes - 1
+            año_anterior = año
+        
+        return inflacion_dict.get((año_anterior, mes_anterior), None)
+
+    # Aplicar la función para calcular la inflación del mes anterior
+    df_resultado['INFLACION_MES_ANTERIOR'] = df_resultado['FECHA'].apply(obtener_inflacion_anterior)
+
+    return df_resultado
+
+
+def add_different_day_means(df_resultado):
+    df_resultado['MEDIA_3_DIAS'] = df_resultado['DISPENSADO'].rolling(window=3, min_periods=1).mean()
+    df_resultado['MEDIA_7_DIAS'] = df_resultado['DISPENSADO'].rolling(window=7, min_periods=1).mean()
+    df_resultado['MEDIA_15_DIAS'] = df_resultado['DISPENSADO'].rolling(window=15, min_periods=1).mean()
+    df_resultado['MEDIA_30_DIAS'] = df_resultado['DISPENSADO'].rolling(window=30, min_periods=1).mean()
+
+    return df_resultado
+
+
+def add_important_days(df_resultado, dias_importantes_path='data/dias_importantes.csv'):
+    # Leer el archivo de días importantes
+    df_dias_importantes = pd.read_csv(dias_importantes_path)
+
+    # Crear una columna de fecha en el DataFrame de días importantes
+    df_dias_importantes['FECHA'] = pd.to_datetime(
+        dict(year=df_dias_importantes['año'], 
+            month=df_dias_importantes['mes'], 
+            day=df_dias_importantes['día'])
+    )
+
+    # Crear un conjunto de fechas importantes para rápida comparación
+    fechas_importantes = set(df_dias_importantes['FECHA'])
+
+    # Agregar columna al df_resultado indicando si el día es importante
+    df_resultado['ES_DIA_IMPORTANTE'] = df_resultado['FECHA'].apply(lambda x: 1 if x in fechas_importantes else 0)
+
+    return df_resultado
+
+
+def adding_final_target(df_resultado):
+    df_resultado['TARGET'] = df_resultado['DISPENSADO'].rolling(window=7, min_periods=1).sum()
+
+    return df_resultado
+
+def process_data(n):
+    
+    os.makedirs('data_processed', exist_ok=True)
+    df_total = import_data('data') 
+
+    for i in range(0, n+1):
+        df_resultado = missing_data_interpolation(df_total, i)
+        df_resultado = week_one_hot_encoding(df_resultado)
+        df_resultado = split_date(df_resultado)
+        df_resultado = add_inflation(df_resultado, 'data/inflation.csv')
+        df_resultado = add_different_day_means(df_resultado)
+        df_resultado = add_important_days(df_resultado, 'data/dias_importantes.csv')
+        df_resultado = adding_final_target(df_resultado)
+
+        df_resultado.to_csv(f'data_processed/df_resultado_cajero_{i}.csv', index=False)
+
+    print("Todos los archivos fueron guardados en la carpeta 'data_processed'.")
+
