@@ -33,57 +33,53 @@ def import_data(data_path='data'):
 
 
 def missing_data_interpolation(df_total, n):
-    # Filtrar y ordenar
-    df_cajero_n = df_total[df_total['NRO_CAJERO'] == n].sort_values('FECHA')
-    rango_fechas = pd.date_range(start=df_cajero_n['FECHA'].min(), end=df_cajero_n['FECHA'].max(), freq='D')
-    df_completo = pd.DataFrame({'FECHA': rango_fechas})
 
-    # Merge para tener NaNs en días faltantes
-    df_merge = df_completo.merge(df_cajero_n[['FECHA', 'DISPENSADO', 'REMANENTE']], on='FECHA', how='left')
+    df = df_total[df_total['NRO_CAJERO'] == n].sort_values('FECHA')
 
-    # Inicializar columnas interpoladas
-    df_merge['REMANENTE_interp'] = df_merge['REMANENTE']
-    df_merge['DISPENSADO_interp'] = df_merge['DISPENSADO']
+    df = df.copy()
+    df['FECHA'] = pd.to_datetime(df['FECHA'])
+    df = df.sort_values('FECHA').reset_index(drop=True)
 
-    # Índices de días con datos
-    idx_known = df_merge[df_merge['REMANENTE'].notna()].index
+    nro_cajero = df['NRO_CAJERO'].iloc[0]
 
-    # Recorrer pares de días conocidos consecutivos
-    for i in range(len(idx_known) - 1):
-        idx_start = idx_known[i]
-        idx_end = idx_known[i+1]
-        
-        rem_start = df_merge.at[idx_start, 'REMANENTE']
-        rem_end = df_merge.at[idx_end, 'REMANENTE']
-        
-        # Días faltantes entre idx_start y idx_end
-        gap_idx = list(range(idx_start + 1, idx_end))
+    # Creamos un diccionario de acceso rápido por fecha
+    datos = {row['FECHA']: row for _, row in df.iterrows()}
 
-        if not gap_idx:
-            continue  # nada que interpolar
-        
-        if rem_end < rem_start:
-            df_merge.loc[gap_idx, 'REMANENTE_interp'] = df_merge['REMANENTE_interp'].interpolate(method='linear').loc[gap_idx]
-            
-            for j in gap_idx:
-                rem_anterior = df_merge.loc[j - 1, 'REMANENTE_interp']
-                rem_actual = df_merge.loc[j, 'REMANENTE_interp']
-                df_merge.loc[j, 'DISPENSADO_interp'] = rem_anterior - rem_actual
-        else:
-            # Caso especial: no interpolar, repetir valor anterior y poner DISPENSADO=0
-            df_merge.loc[gap_idx, 'REMANENTE_interp'] = rem_start
-            df_merge.loc[gap_idx, 'DISPENSADO_interp'] = 0
+    # Fechas completas esperadas
+    fechas_completas = pd.date_range(df['FECHA'].min(), df['FECHA'].max(), freq='D')
 
-    # Asegurar que el primer DISPENSADO no sea NaN
-    df_merge['DISPENSADO_interp'] = df_merge['DISPENSADO_interp'].fillna(0)
+    # Vamos construyendo el nuevo conjunto de datos
+    nuevas_filas = {}
 
-    # Resultado final
-    df_resultado = df_merge[['FECHA', 'DISPENSADO_interp', 'REMANENTE_interp']].rename(
-        columns={'DISPENSADO_interp': 'DISPENSADO', 'REMANENTE_interp': 'REMANENTE'}
-    )
-    df_resultado['NRO_CAJERO'] = n
+    for i in reversed(range(len(fechas_completas) - 1)):
+        fecha = fechas_completas[i]
+        fecha_sig = fechas_completas[i + 1]
 
-    return df_resultado
+        if fecha not in datos:
+            # Buscar en datos + nuevas_filas la fila siguiente
+            if fecha_sig in nuevas_filas:
+                fila_siguiente = nuevas_filas[fecha_sig]
+            elif fecha_sig in datos:
+                fila_siguiente = datos[fecha_sig]
+            else:
+                continue  # No tenemos datos para calcular
+
+            nueva_fila = {
+                'FECHA': fecha,
+                'NRO_CAJERO': nro_cajero,
+                'REMANENTE': fila_siguiente['REMANENTE'] + fila_siguiente['DISPENSADO'],
+                'DISPENSADO': 0
+            }
+
+            nuevas_filas[fecha] = nueva_fila
+
+    # Combinar original con nuevas filas
+    df_final = pd.concat([
+        df,
+        pd.DataFrame(nuevas_filas.values())
+    ]).sort_values('FECHA').reset_index(drop=True)
+
+    return df_final
 
 
 def week_one_hot_encoding(df_resultado):
@@ -164,9 +160,10 @@ def add_important_days(df_resultado, dias_importantes_path='data/dias_importante
     return df_resultado
 
 
-def adding_final_target(df_resultado):
+def final_details(df_resultado):
     df_resultado['TARGET'] = df_resultado['DISPENSADO'].rolling(window=7, min_periods=1).sum()
-
+    df_resultado = df_resultado.drop(columns=['NRO_CAJERO'])
+    
     return df_resultado
 
 def process_data(n):
@@ -174,14 +171,16 @@ def process_data(n):
     os.makedirs('data_processed', exist_ok=True)
     df_total = import_data('data') 
 
-    for i in range(0, n+1):
+    k = min(n, df_total['NRO_CAJERO'].max())
+
+    for i in range(0, k+1):
         df_resultado = missing_data_interpolation(df_total, i)
         df_resultado = week_one_hot_encoding(df_resultado)
         df_resultado = split_date(df_resultado)
         df_resultado = add_inflation(df_resultado, 'data/inflation.csv')
         df_resultado = add_different_day_means(df_resultado)
         df_resultado = add_important_days(df_resultado, 'data/dias_importantes.csv')
-        df_resultado = adding_final_target(df_resultado)
+        df_resultado = final_details(df_resultado)
 
         df_resultado.to_csv(f'data_processed/df_resultado_cajero_{i}.csv', index=False)
 
