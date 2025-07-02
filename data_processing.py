@@ -81,27 +81,14 @@ def missing_data_interpolation(df_total, n):
 
     return df_final
 
+# Se hace en el data_loader.py
+# def split_date(df_resultado):
+#     df_resultado['AÑO'] = df_resultado['FECHA'].dt.year
+#     df_resultado['MES'] = df_resultado['FECHA'].dt.month
+#     df_resultado['DIA'] = df_resultado['FECHA'].dt.day
+#     df_resultado['WEEKDAY'] = df_resultado['FECHA'].dt.weekday
 
-def week_one_hot_encoding(df_resultado):
-    dia_de_la_semana = df_resultado['FECHA'].dt.day_name()
-
-    # Realizar el one-hot encoding
-    dias_one_hot = pd.get_dummies(dia_de_la_semana, prefix='DIA')
-
-    dias_one_hot = dias_one_hot.astype(int)
-
-    # Concatenar las columnas de one-hot encoding al DataFrame original
-    df_resultado = pd.concat([df_resultado, dias_one_hot], axis=1)
-
-    return df_resultado
-
-
-def split_date(df_resultado):
-    df_resultado['AÑO'] = df_resultado['FECHA'].dt.year
-    df_resultado['MES'] = df_resultado['FECHA'].dt.month
-    df_resultado['DIA'] = df_resultado['FECHA'].dt.day
-
-    return df_resultado
+#     return df_resultado
 
 
 def add_inflation(df_resultado, inflacion_path='data/inflation.csv'):
@@ -175,8 +162,7 @@ def process_data(n):
 
     for i in range(0, k+1):
         df_resultado = missing_data_interpolation(df_total, i)
-        df_resultado = week_one_hot_encoding(df_resultado)
-        df_resultado = split_date(df_resultado)
+        #df_resultado = split_date(df_resultado)
         df_resultado = add_inflation(df_resultado, 'data/inflation.csv')
         df_resultado = add_different_day_means(df_resultado)
         df_resultado = add_important_days(df_resultado, 'data/dias_importantes.csv')
