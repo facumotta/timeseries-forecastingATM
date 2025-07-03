@@ -176,3 +176,7 @@ cython_debug/
 __pycache__/
 data/
 data_processed/
+checkpoints/
+results/
+test_results/
+result_forecast.txt
