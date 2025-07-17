@@ -22,3 +22,4 @@ dependencies:
     - --extra-index-url https://download.pytorch.org/whl/cu126
     - torch
     - tqdm
+    - seaborn
