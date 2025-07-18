@@ -31,105 +31,129 @@ class Dataset_ATM_day(Dataset):
         self.data_path = data_path
         
         # After initialization, call __read_data__() to manage the data file.
+        self.data_list = []  # lista de series
+        self.stamp_list = [] # lista de marcas temporales
+        self.window_indices = [] # [(serie_idx, start_idx)]
         self.__read_data__()
 
 
     def __read_data__(self):
-        self.scaler = StandardScaler()
-
+        
         current_path = os.path.abspath(".")
         print("Current Path:", current_path)
 
-        #get raw data from path
-        df_raw = pd.read_csv(os.path.join(self.root_path,
-                                        self.data_path))
+        csv_files = [f for f in os.listdir(self.root_path) if f.endswith('.csv')]
 
-        # split data set into train, vali, test. border1 is the left border and border2 is the right.
-        # Once flag(train, vali, test) is determined, __read_data__ will return certain part of the dataset.
-        total_points = len(df_raw)  # total number of data points
+        train_data_list_for_scaler = []
 
-        # Definimos los tamaños por proporción
-        train_days = int(0.80 * total_points)
-        val_days   = int(0.15 * total_points)
-        test_days  = total_points - train_days - val_days  # lo que sobra para test
+        for csv_file in csv_files:
+            df_raw = pd.read_csv(os.path.join(self.root_path, csv_file))
+            total_points = len(df_raw)
 
-        # Construimos los bordes
-        border1s = [
-            0,                           # train
-            train_days - self.seq_len,  # val (restamos seq_len para asegurar ventana)
-            train_days + val_days - self.seq_len  # test
-        ]
+            train_days = int(0.80 * total_points)
+            val_days = int(0.15 * total_points)
+            test_days = total_points - train_days - val_days
 
-        border2s = [
-            train_days,                  # fin de train
-            train_days + val_days,       # fin de val
-            total_points                  # fin de test
-        ]
+            if self.features == 'M' or self.features == 'MS':
+                cols_data = df_raw.columns[1:]
+                df_data = df_raw[cols_data]
+            elif self.features == 'S':
+                df_data = df_raw[[self.target]]
 
-        border1 = border1s[self.set_type]
-        border2 = border2s[self.set_type]
+            # Extraemos solo el train de este CSV
+            train_data = df_data.iloc[0:train_days]
+            train_data_list_for_scaler.append(train_data.values)
 
-        #decide which columns to select
-        if self.features == 'M' or self.features == 'MS':
-            cols_data = df_raw.columns[1:] # column name list (remove 'FECHA')
-            df_data = df_raw[cols_data]  #remove the first column, which is time stamp info
-        elif self.features == 'S':
-            df_data = df_raw[[self.target]] # target column
+        # Concatenar todo el train para hacer fit del scaler global
+        all_train_data = np.concatenate(train_data_list_for_scaler, axis=0)
 
-        #scale data by the scaler that fits training data
-        if self.scale:
-            train_data = df_data[border1s[0]:border2s[0]]
-            #train_data.values: turn pandas DataFrame into 2D numpy
-            self.scaler.fit(train_data.values)  
-            data = self.scaler.transform(df_data.values)
-        else:
-            data = df_data.values 
-        
-        # Creo un scaler para el target
-        # Este scaler se usará para invertir la escala del target al final
+        # Crear y ajustar escalador global
+        self.scaler = StandardScaler()
+        self.scaler.fit(all_train_data)
+
+        # Escalador para el target también global
         self.target_scaler = StandardScaler()
-        self.target_scaler.fit(train_data[[self.target]].values) 
+        # Extraer solo la última columna (target) de all_train_data para fit
+        self.target_scaler.fit(all_train_data[:, -1].reshape(-1,1))
 
 
-        #time stamp:df_stamp is a object of <class 'pandas.core.frame.DataFrame'> and
-        # has one column called 'date' like 2016-07-01 00:00:00
-        df_stamp = df_raw[['FECHA']][border1:border2]
-        
-        # Since the date format is uncertain across different data file, we need to 
-        # standardize it so we call func 'pd.to_datetime'
-        df_stamp['FECHA'] = pd.to_datetime(df_stamp.FECHA) 
 
-        if self.timeenc == 0:  #time feature encoding is fixed or learned
-            df_stamp['MES'] = df_stamp.FECHA.apply(lambda row: row.month, 1)
-            df_stamp['DIA'] = df_stamp.FECHA.apply(lambda row: row.day, 1)
-            df_stamp['WEEKDAY'] = df_stamp.FECHA.apply(lambda row: row.weekday(), 1)
-            #now df_frame has multiple columns recording the month, day etc. time stamp
-            # next we delete the 'date' column and turn 'DataFrame' to a list
-            data_stamp = df_stamp.drop(columns=['FECHA'], axis=1).values
+    #----------------------------------------------------------------------------
 
-        
-        # data_x and data_y are same copy of a certain part of data
-        self.data_x = data[border1:border2]
-        self.data_y = data[border1:border2, -1] # last column is the target
-        self.data_stamp = data_stamp
+        for file_idx, csv_file in enumerate(csv_files):
+            df_raw = pd.read_csv(os.path.join(self.root_path, csv_file))
+            total_points = len(df_raw)
+            train_days = int(0.80 * total_points)
+            val_days   = int(0.15 * total_points)
+            test_days  = total_points - train_days - val_days
+
+            border1s = [
+                0,
+                train_days - self.seq_len,
+                train_days + val_days - self.seq_len
+            ]
+            border2s = [
+                train_days,
+                train_days + val_days,
+                total_points
+            ]
+            
+            border1 = border1s[self.set_type]
+            border2 = border2s[self.set_type]
+
+            if self.features == 'M' or self.features == 'MS':
+                cols_data = df_raw.columns[1:]
+                df_data = df_raw[cols_data]
+            elif self.features == 'S':
+                df_data = df_raw[[self.target]]
+
+            train_data = df_data[border1s[0]:border2s[0]]
+            if self.scale:
+                data = self.scaler.transform(df_data.values)
+            else:
+                data = df_data.values
+
+
+            df_stamp = df_raw[['FECHA']][border1:border2]
+            df_stamp['FECHA'] = pd.to_datetime(df_stamp.FECHA)
+            if self.timeenc == 0:
+                df_stamp['MES'] = df_stamp.FECHA.apply(lambda row: row.month, 1)
+                df_stamp['DIA'] = df_stamp.FECHA.apply(lambda row: row.day, 1)
+                df_stamp['WEEKDAY'] = df_stamp.FECHA.apply(lambda row: row.weekday(), 1)
+                data_stamp = df_stamp.drop(columns=['FECHA'], axis=1).values
+
+            data_x = data[border1:border2]
+            data_y = data[border1:border2, -1]
+            self.data_list.append((data_x, data_y))
+            self.stamp_list.append(data_stamp)
+
+            # Guardar los índices de ventanas posibles para esta serie
+            num_windows = len(data_x) - self.seq_len - self.pred_len + 1
+            for i in range(num_windows):
+                self.window_indices.append((file_idx, i))
+
 
     def __getitem__(self, index):
-        s_begin = index
-        s_end = s_begin + self.seq_len
-        r = s_end  # el target es el siguiente valor
+        serie_idx, start_idx = self.window_indices[index]
+        data_x, data_y = self.data_list[serie_idx]
+        data_stamp = self.stamp_list[serie_idx]
 
-        seq_x = self.data_x[s_begin:s_end]
-        seq_y = self.data_y[r:r + self.pred_len]
+        s_begin = start_idx
+        s_end = s_begin + self.seq_len
+        r = s_end
+
+        seq_x = data_x[s_begin:s_end]
+        seq_y = data_y[r:r + self.pred_len]
         if len(seq_y.shape) == 1:
             seq_y = seq_y[:, None]
 
-        seq_x_mark = self.data_stamp[s_begin:s_end]
-        seq_y_mark = self.data_stamp[r:r + self.pred_len]
+        seq_x_mark = data_stamp[s_begin:s_end]
+        seq_y_mark = data_stamp[r:r + self.pred_len]
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark
 
     def __len__(self):
-        return len(self.data_x) - self.seq_len - self.pred_len + 1
+        return len(self.window_indices)
     
     def inverse_transform(self, data):
-        return self.scaler.inverse_transform(data)
+        return self.target_scaler.inverse_transform(data)
