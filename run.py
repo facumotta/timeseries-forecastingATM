@@ -15,7 +15,7 @@ if __name__ == '__main__':
     args = argparse.Namespace(
         task_name='forecast',  # task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]
         is_training=True,  # status
-        model_id=f'prueba',  # model id
+        model_id=f'model_test_for_cluster_0',  # model id
         model='TimesNet',  # model name, options: [Autoformer, Transformer, TimesNet]
 
         data='ATM',  # dataset type
@@ -30,12 +30,12 @@ if __name__ == '__main__':
         pred_len=1,  # prediction sequence length
         inverse=True,  # inverse output data
 
-        top_k=3,  # for TimesBlock
+        top_k=5,  # top_k frequencies for TimesBlock
         num_kernels=5,  # for Inception
         enc_in=9,  # encoder input size
         c_out=1,  # output size
         d_model=64,  # dimension of model
-        e_layers=3,  # num of encoder layers
+        e_layers=2,  # num of encoder layers
         d_ff=64,  # dimension of fcn
         dropout=0.1,  # dropout
         embed='fixed',  # time features encoding, options:[timeF, fixed, learned]
@@ -43,8 +43,8 @@ if __name__ == '__main__':
 
         num_workers=10,  # data loader num workers
         itr=1,  # experiments times
-        train_epochs=15,  # train epochs
-        batch_size=32,  # batch size of train input data
+        train_epochs=20,  # train epochs
+        batch_size=16,  # batch size of train input data
         patience=15,  # early stopping patience
         learning_rate=0.001,  # optimizer learning rate
         lradj='type1',  # adjust learning rate
