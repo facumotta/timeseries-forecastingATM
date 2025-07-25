@@ -109,8 +109,8 @@ class Forecast(Basic):
                     loss = criterion(outputs, batch_y)
                     train_loss.append(loss.item())
 
-                # When train rounds attain some 5-multiple, print speed, left time, loss. etc feedback
-                if (i + 1) % 5 == 0:
+                # When train rounds attain some 100-multiple, print speed, left time, loss. etc feedback
+                if (i + 1) % 100 == 0:
                     print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.args.train_epochs - epoch) * train_steps - i)
