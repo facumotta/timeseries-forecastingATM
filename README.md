@@ -65,8 +65,6 @@ The result is a clean and functional implementation, tailored for our use case.
 
 ## 🔧 Key Hyperparameters
 
-> *(To be completed by the team)*
-
 - Input window size: `60`
 - Embedding dimension: `64`
 - Number of layers: `2`
@@ -102,10 +100,13 @@ We compared the **real vs. predicted sum of withdrawals over 7 days** using:
 ## 📁 Project Structure
 
 - `data/`: raw and processed datasets.
-- `models/`: model checkpoints and training scripts.
-- `notebooks/`: exploratory analysis and training.
-- `scripts/`: preprocessing, training, evaluation.
+- `layers/`: model' layers scripts.
+- `models/`: model scripts.
+- `exp/`: experimentation scripts for forecast.
+- `notebooks/`: exploratory analysis and clustering.
+- `utils/`: utilities for the model.
 - `results/`: graphs and evaluation metrics.
+- `images/`: handmade folder for Readme.
 
 ---
 
@@ -113,7 +114,7 @@ We compared the **real vs. predicted sum of withdrawals over 7 days** using:
 
 - Final project repo: [github.com/facumotta/timeseries-forecastingATM](https://github.com/facumotta/timeseries-forecastingATM)
 - Original TimesNet repo: [github.com/thuml/Time-Series-Library](https://github.com/thuml/Time-Series-Library)
-- YouTube presentation: (to be completed).
+- YouTube presentation (Spanish): (to be completed).
 
 ---
 
