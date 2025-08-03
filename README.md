@@ -1,5 +1,5 @@
 # Final Project - Advanced Signal Processing - 1st Semester 2025
-### Facundo Álvarez Motta, Manuel Horn, Ignacio Rodríguez Sañudo
+### Facundo Alvarez Motta, Manuel Horn, Ignacio Rodriguez Sañudo
 
 ## 🏦 Cash Withdrawal Forecasting in ATMs
 
