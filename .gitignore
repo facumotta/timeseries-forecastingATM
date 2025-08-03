@@ -177,6 +177,7 @@ __pycache__/
 data/
 data_processed/
 checkpoints/
+images_presentation/
 results/
 test_results/
 result_forecast.txt

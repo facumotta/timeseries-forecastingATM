@@ -15,7 +15,7 @@ if __name__ == '__main__':
     args = argparse.Namespace(
         task_name='forecast',  # task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]
         is_training=True,  # status
-        model_id=f'model_test_for_cluster_0',  # model id
+        model_id=f'model_for_cluster_0',  # model id
         model='TimesNet',  # model name, options: [Autoformer, Transformer, TimesNet]
 
         data='ATM',  # dataset type
