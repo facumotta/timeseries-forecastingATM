@@ -114,7 +114,7 @@ We compared the **real vs. predicted sum of withdrawals over 7 days** using:
 
 - Final project repo: [github.com/facumotta/timeseries-forecastingATM](https://github.com/facumotta/timeseries-forecastingATM)
 - Original TimesNet repo: [github.com/thuml/Time-Series-Library](https://github.com/thuml/Time-Series-Library)
-- YouTube presentation (Spanish): 🔴 [YouTube Presentation](https://www.youtube.com/watch?v=dPt5DXMPHTg)
+- YouTube presentation (Spanish): [YouTube Presentation](https://www.youtube.com/watch?v=dPt5DXMPHTg)
 
 ---
 
